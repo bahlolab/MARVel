@@ -1,0 +1,296 @@
+---
+title: "`r params$cohort_label` — mtDNA Variant Report"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    self_contained: true
+    code_folding: hide
+params:
+  config: "config.R"
+  cohort_label: "Ataxia cohort"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width  = 10,
+  fig.height = 6
+)
+
+source(params$config)
+```
+
+```{r load_data}
+source("modules/01_load_data.R")
+```
+
+---
+
+# Coverage {.tabset}
+
+```{r coverage}
+source("modules/02_coverage.R")
+```
+
+<details><summary>ℹ️ Coverage metrics</summary>
+**Median depth** — median per-base sequencing depth across the mitochondrial genome (chrM) after Mutect2 calling. Samples below the threshold (`r min_median_depth`x) are flagged.
+
+**mtDNA copy number (mtDNA-CN)** — estimated number of mitochondrial genome copies per cell, calculated from the ratio of mitochondrial to nuclear read counts.
+
+**CV (coefficient of variation)** — sd / mean depth across all mtDNA positions. High CV (> 0.2) indicates uneven coverage, which can affect variant calling reliability.
+
+**Cumulative coverage** — proportion of mtDNA bases covered at ≥ X depth. Useful for assessing whether low-depth regions will limit heteroplasmy detection.
+</details>
+
+## Depth per sample
+```{r}
+cov_plots$depth_per_sample
+```
+
+## mtDNA-CN
+```{r}
+cov_plots$mtdna_cn
+```
+
+## Base coverage
+```{r fig.height=5}
+cov_plots$base_coverage
+```
+
+## Cumulative coverage
+```{r}
+cov_plots$cumulative_coverage
+```
+
+## CV distribution
+```{r fig.height=5}
+cov_plots$cv_distribution
+```
+
+---
+
+# Contamination {.tabset}
+
+```{r contamination}
+source("modules/03_contamination.R")
+```
+
+<details><summary>ℹ️ Contamination (haplocheck)</summary>
+**Haplocheck** detects mtDNA contamination by identifying the presence of two distinct mitochondrial haplotypes in a single sample. It reports a contamination level (0–1) representing the minor haplotype fraction. Samples with contamination ≥ `r contam_threshold * 100`% are flagged. A value of 0 indicates "not detected" (ND).
+</details>
+
+## Level per sample
+```{r fig.height=8}
+contam_plots$level_per_sample
+```
+
+## Level vs depth
+```{r}
+contam_plots$level_vs_depth
+```
+
+---
+
+# Haplogroup {.tabset}
+
+```{r haplogroup}
+source("modules/04_haplogroup.R")
+```
+
+<details><summary>ℹ️ Haplogroup assignment</summary>
+Haplogroups are assigned by mitoHPC using the mtDNA phylogeny. **Macro-haplogroups** are the top-level branches (e.g. H, J, L0). Samples are grouped into three major **clades**: L (African), M (Asian/Oceanian), and N/R (Eurasian/American).
+
+**Assignment quality** is a score (0–1) reflecting confidence in the haplogroup call. Scores below 0.5 (red line) indicate poor assignment; scores below 0.8 (orange line) may warrant manual review.
+</details>
+
+## Macro-haplogroup distribution
+```{r fig.height=7}
+hg_plots$top_macro_haplogroups
+```
+
+## Assignment quality
+```{r}
+hg_plots$quality
+```
+
+---
+
+# PCA {.tabset}
+
+```{r pca}
+source("modules/05_pca.R")
+```
+
+<details><summary>ℹ️ mtDNA PCA projection</summary>
+Cohort samples are projected onto a pre-computed PCA space derived from 1000 Genomes Project (1000G) mtDNA data. The PCA uses `r if(exists("variant_ids")) length(variant_ids) else "~317"` homoplasmic variant sites. Each cohort sample's allele dosage vector is mean-centred and multiplied by the 1000G loadings matrix to produce PC scores.
+
+Clustering of cohort samples with 1000G groups reflects ancestral haplogroup structure. Outliers may indicate unusual haplogroup composition, data quality issues, or nuclear mitochondrial DNA (NUMT) contamination.
+</details>
+
+## PC1 vs PC2
+```{r}
+pca_plots$pc1_pc2
+```
+
+## PC2 vs PC3
+```{r}
+pca_plots$pc2_pc3
+```
+
+## Scree plot
+```{r fig.height=4}
+pca_plots$scree
+```
+
+---
+
+# Variants {.tabset}
+
+```{r variants}
+source("modules/06_variants.R")
+```
+
+<details><summary>ℹ️ Variant calling and classification</summary>
+Variants are called by Mutect2 in mitochondrial mode. PASS variants with VAF ≥ 0.03 are retained after blacklist filtering and strand bias exclusion.
+
+**Homoplasmic** — VAF ≥ `r min_hom_vaf` (variant present in nearly all mitochondrial copies).
+**Heteroplasmic** — 0.03 ≤ VAF < `r min_hom_vaf` (variant present in a subset of copies).
+
+**MLC score** — Mitochondrial Local Constraint score (0–1). Higher scores indicate greater predicted functional impact based on local sequence constraint.
+
+**Variant class** — a unique variant (POS:REF:ALT) is classified as *homoplasmic only*, *heteroplasmic only*, or *homoplasmic/heteroplasmic* based on whether it appears homoplasmic in at least one sample, heteroplasmic in at least one sample, or both.
+
+**Frequency spectrum** — cohort allele frequency of each unique variant, binned from singletons to common variants (>10% of samples).
+</details>
+
+## Summary
+```{r fig.height=8, fig.width=10}
+var_plots$summary_pies
+```
+
+## VAF distribution
+```{r}
+var_plots$vaf_distribution
+```
+
+## Homoplasmy by clade
+```{r}
+var_plots$hom_per_sample_clade
+```
+
+## Heteroplasmy by clade
+```{r}
+var_plots$het_per_sample_clade
+```
+
+## MSS
+```{r}
+var_plots$mss_distribution
+```
+
+## Consequence breakdown
+```{r fig.height=6}
+var_plots$consequence_breakdown
+```
+
+## MLC score
+```{r}
+var_plots$mlc_score_dist
+```
+
+## Frequency spectrum
+```{r}
+var_plots$freq_spectrum
+```
+
+---
+
+# Relatedness {.tabset}
+
+```{r relatedness}
+source("modules/07_relatedness.R")
+has_flagged <- nrow(rel_data$pairs) > 0
+```
+
+<details><summary>ℹ️ Relatedness / duplicate detection</summary>
+Pairwise **Jaccard similarity** is computed on the set of PASS homoplasmic variants (VAF ≥ `r min_hom_vaf`) for each sample pair. Jaccard = |intersection| / |union| of variant key sets (POS:REF:ALT).
+
+- **Jaccard = 1.0** — identical variant profiles; probable duplicate or sample swap.
+- **Jaccard > 0.95** — near-identical profiles; probable mother-offspring or close relative.
+
+Note: samples sharing the same haplogroup will have elevated Jaccard due to haplogroup-defining variants, but duplicates/relatives will be near 1.0 while unrelated same-haplogroup samples cluster well below this.
+</details>
+
+## Pairwise similarity
+```{r}
+rel_plots$ibs_distribution
+```
+
+```{r flagged_section, eval=has_flagged, results='asis'}
+cat("## Flagged pairs\n")
+```
+
+```{r flagged_plot, eval=has_flagged}
+rel_plots$flagged_pairs
+```
+
+---
+
+# QC Summary {.tabset}
+
+```{r qc_summary}
+source("modules/08_qc_summary.R")
+```
+
+## Flags
+```{r fig.height=4}
+qc_plots$flags
+```
+
+## Sample table
+```{r}
+qc_table
+```
+
+---
+
+# Glossary
+
+**VAF (variant allele frequency)** — proportion of mitochondrial DNA copies carrying the variant allele (0–1).
+
+**CV (coefficient of variation)** — sd / mean depth; measure of coverage uniformity across the mtDNA genome.
+
+**Haplogroup** — a clade of mitochondrial genomes defined by shared polymorphisms, reflecting maternal ancestry.
+
+**Heteroplasmy** — co-existence of more than one mitochondrial DNA variant at a given position within a cell or tissue. Here defined as 0.03 ≤ VAF < `r min_hom_vaf`.
+
+**Homoplasmy** — a variant present in (nearly) all mitochondrial DNA copies. Here defined as VAF ≥ `r min_hom_vaf`.
+
+**Jaccard similarity** — |A ∩ B| / |A ∪ B| for two sets of variants; ranges 0 (no overlap) to 1 (identical).
+
+**MLC score** — Mitochondrial Local Constraint score (0–1); higher = greater predicted functional impact based on local sequence constraint.
+
+**MSS (Mitochondrial Local Constraint Score Sum)** — per-sample sum of MLC scores across all heteroplasmic PASS variants. Reflects the aggregate constraint burden of heteroplasmic variants in a sample.
+
+**mtDNA-CN** — mitochondrial DNA copy number; estimated copies of the mitochondrial genome per cell.
+
+**NUMT** — nuclear mitochondrial DNA segment; a mtDNA sequence integrated into the nuclear genome that can confound variant calling.
+
+
+---
+
+```{r session_info, results='asis'}
+cat(sprintf(
+  "_Report generated: %s | Cohort: %s | Samples: %d | R version: %s_",
+  format(Sys.time(), "%Y-%m-%d %H:%M"),
+  cohort_label,
+  nrow(samples$meta),
+  R.version$version.string
+))
+```
