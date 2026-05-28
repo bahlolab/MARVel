@@ -70,14 +70,15 @@ all_ids <- data.frame(ID = names(vcf_ok), stringsAsFactors = FALSE)
 
 # ── 1. VAF distribution ───────────────────────────────────────────────────────
 if (!is.null(all_vars) && nrow(all_vars) > 0) {
-  
+
   var_plots$vaf_distribution <- ggplot(all_vars,
-                                       aes(x = AF, fill = zygosity, colour = zygosity)) +
+      aes(x = AF, fill = zygosity, colour = zygosity)) +
     geom_histogram(binwidth = 0.02, position = "stack", alpha = 0.8) +
     scale_fill_manual(values  = c("Homoplasmic"   = "steelblue",
                                   "Heteroplasmic" = "#E07B3A"), name = NULL) +
     scale_colour_manual(values = c("Homoplasmic"  = "steelblue",
                                    "Heteroplasmic"= "#E07B3A"), name = NULL) +
+    scale_y_log10() +
     geom_vline(xintercept = c(0.03, 0.95), linetype = "dashed",
                colour = "grey30", linewidth = 0.6) +
     annotate("text", x = 0.03, y = Inf, label = "0.03",
@@ -85,33 +86,33 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
     annotate("text", x = 0.95, y = Inf, label = "0.95",
              hjust = -0.15, vjust = 1.5, size = 3, colour = "grey30") +
     labs(title = "VAF distribution (PASS variants)",
-         x = "Allele frequency", y = "# variants") +
+         x = "Allele frequency", y = "# variants (log10)") +
     theme_minimal(base_size = 11) +
     theme(legend.position = "top")
-  
-  
-  
+
+
+
   # ── per-unique-variant class (used in sections 5 and 9) ──────────────────
   has_hom <- aggregate(AF ~ POS + REF + ALT, data = all_vars,
                        FUN = function(x) any(x >= min_hom_vaf))
   names(has_hom)[4] <- "any_hom"
-  
+
   has_het <- aggregate(AF ~ POS + REF + ALT, data = all_vars,
                        FUN = function(x) any(x < min_hom_vaf))
   names(has_het)[4] <- "any_het"
-  
+
   class_levels <- c("heteroplasmic only", "homoplasmic only", "homoplasmic/heteroplasmic")
   class_cols   <- c("heteroplasmic only"       = "grey70",
                     "homoplasmic only"          = "#5B9BD5",
                     "homoplasmic/heteroplasmic" = "#1A3A6B")
-  
+
   var_class_df <- merge(has_hom, has_het, by = c("POS", "REF", "ALT"))
   var_class_df$var_class <- factor(
     ifelse( var_class_df$any_hom &  var_class_df$any_het, "homoplasmic/heteroplasmic",
-            ifelse( var_class_df$any_hom & !var_class_df$any_het, "homoplasmic only",
-                    "heteroplasmic only")),
+    ifelse( var_class_df$any_hom & !var_class_df$any_het, "homoplasmic only",
+                                                           "heteroplasmic only")),
     levels = class_levels)
-  
+
   # ── 5. consequence breakdown (MLC_consq) ─────────────────────────────────
   # severity ranking: pick most severe when multiple consequences are present
   consq_severity <- c("stop_gained", "frameshift_variant", "splice_site_variant",
@@ -120,45 +121,51 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
                       "tRNA", "rRNA", "intron_variant",
                       "upstream_gene_variant", "downstream_gene_variant",
                       "intergenic_variant")
-  
+
   pick_worst <- function(x) {
     terms <- unique(trimws(strsplit(x, ",")[[1]]))
     hit   <- consq_severity[consq_severity %in% terms]
     if (length(hit)) hit[1] else terms[1]
   }
-  
+
   if ("MLC_consq" %in% names(all_vars)) {
     consq_df <- all_vars[!is.na(all_vars$MLC_consq), ]
     consq_df <- consq_df[!duplicated(consq_df[, c("POS", "REF", "ALT")]), ]
     consq_df$MLC_consq <- sapply(consq_df$MLC_consq, pick_worst)
-    
+
     # reclassify non_coding_transcript_exon_variant -> tRNA / rRNA using flag cols
     nc_idx <- consq_df$MLC_consq == "non_coding_transcript_exon_variant"
     if (any(nc_idx, na.rm = TRUE)) {
       consq_df$MLC_consq[nc_idx & !is.na(consq_df$TRN)] <- "tRNA"
       consq_df$MLC_consq[nc_idx & !is.na(consq_df$RNR)] <- "rRNA"
     }
-    
+
     consq_df <- merge(consq_df, var_class_df[, c("POS", "REF", "ALT", "var_class")],
                       by = c("POS", "REF", "ALT"), all.x = TRUE)
-    
+
     if (nrow(consq_df) > 0) {
       consq_tbl <- as.data.frame(table(Consequence = consq_df$MLC_consq,
                                        var_class   = consq_df$var_class))
       consq_tbl <- consq_tbl[consq_tbl$Freq > 0, ]
-      
+
       # order consequences by total count
       consq_order <- aggregate(Freq ~ Consequence, data = consq_tbl, FUN = sum)
       consq_order <- consq_order[order(consq_order$Freq), ]
       consq_tbl$Consequence <- factor(consq_tbl$Consequence,
                                       levels = consq_order$Consequence)
       consq_tbl$var_class <- factor(consq_tbl$var_class, levels = class_levels)
-      
+
+      consq_totals <- aggregate(Freq ~ Consequence, data = consq_tbl, FUN = sum)
+
       var_plots$consequence_breakdown <- ggplot(consq_tbl,
-                                                aes(x = Freq, y = Consequence, fill = var_class)) +
+          aes(x = Freq, y = Consequence, fill = var_class)) +
         geom_col() +
+        geom_text(data = consq_totals,
+                  aes(x = Freq, y = Consequence, label = Freq),
+                  inherit.aes = FALSE,
+                  hjust = -0.2, size = 3, colour = "grey30") +
         scale_fill_manual(values = class_cols, name = NULL) +
-        scale_x_continuous(expand = expansion(mult = c(0, 0.1))) +
+        scale_x_continuous(expand = expansion(mult = c(0, 0.15))) +
         labs(title = "Variant consequence breakdown (PASS)",
              x = "# unique variants", y = NULL) +
         theme_minimal(base_size = 11) +
@@ -166,13 +173,13 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
               legend.position = "top")
     }
   }
-  
+
   # ── 6. MLC_score distribution ────────────────────────────────────────────
   if ("MLC_score" %in% names(all_vars)) {
     score_df <- all_vars[!is.na(all_vars$MLC_score), ]
     score_df$MLC_score <- as.numeric(score_df$MLC_score)
     score_df <- score_df[!is.na(score_df$MLC_score), ]
-    
+
     if (nrow(score_df) > 0) {
       var_plots$mlc_score_dist <- ggplot(score_df, aes(x = MLC_score)) +
         geom_histogram(bins = 40, fill = "steelblue", colour = "white") +
@@ -184,14 +191,14 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
         theme_minimal(base_size = 11)
     }
   }
-  
+
   # ── 7. MSS (mitochondrial severity score) per sample ─────────────────────
   # MSS = sum of MLC_score across heteroplasmic PASS variants per sample
   if ("MLC_score" %in% names(all_vars)) {
     het_vars <- all_vars[all_vars$AF < min_hom_vaf, ]
     het_vars$MLC_score <- suppressWarnings(as.numeric(het_vars$MLC_score))
     het_vars <- het_vars[!is.na(het_vars$MLC_score), ]
-    
+
     if (nrow(het_vars) > 0) {
       mss_df <- aggregate(MLC_score ~ ID, data = het_vars, FUN = sum)
       names(mss_df)[2] <- "MSS"
@@ -202,10 +209,10 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
       mss_df$clade <- factor(mss_df$clade,
                              levels = intersect(c("N/R", "M", "L", "Unknown"),
                                                 unique(mss_df$clade)))
-      
+
       set.seed(42)
       mss_df$jitter_y <- runif(nrow(mss_df), -0.4, 0.4)
-      
+
       p_mss <- ggplot() +
         geom_histogram(data = mss_df, aes(x = MSS, fill = clade, colour = clade),
                        bins = 40, alpha = 0.5, position = "identity") +
@@ -224,7 +231,7 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
              x = "MSS (sum of heteroplasmic MLC scores)", y = "# samples") +
         theme_minimal(base_size = 11) +
         theme(legend.position = "top")
-      
+
       var_plots$mss_distribution <- ggplotly(p_mss, tooltip = "text") |>
         layout(margin = list(t = 80, b = 80),
                annotations = list(
@@ -237,24 +244,24 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
                       font = list(size = 10, color = "grey40"))))
     }
   }
-  
+
   # ── 8. homoplasmy count per sample coloured by clade ─────────────────────
   hom_df <- all_vars[all_vars$AF >= min_hom_vaf, ]
   hom_cnt <- as.data.frame(table(ID = hom_df$ID))
   names(hom_cnt)[2] <- "n_hom"
-  
+
   hom_cnt <- merge(all_ids, hom_cnt, by = "ID", all.x = TRUE)
   hom_cnt$n_hom[is.na(hom_cnt$n_hom)] <- 0
-  
+
   hom_cnt <- merge(hom_cnt, meta[, c("ID", "clade")], by = "ID", all.x = TRUE)
   hom_cnt$clade[is.na(hom_cnt$clade)] <- "Unknown"
-  
+
   clade_levels <- intersect(c("N/R", "M", "L", "Unknown"), unique(hom_cnt$clade))
   hom_cnt$clade <- factor(hom_cnt$clade, levels = clade_levels)
-  
+
   set.seed(42)
   hom_cnt$jitter_y <- runif(nrow(hom_cnt), -0.4, 0.4)
-  
+
   p_hom <- ggplot() +
     geom_histogram(data = hom_cnt, aes(x = n_hom, fill = clade, colour = clade),
                    binwidth = 1, alpha = 0.5, position = "identity") +
@@ -273,7 +280,7 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
          x = "# homoplasmic variants", y = "# samples") +
     theme_minimal(base_size = 11) +
     theme(legend.position = "top")
-  
+
   var_plots$hom_per_sample_clade <- ggplotly(p_hom, tooltip = "text") |>
     layout(margin = list(t = 80, b = 80),
            annotations = list(
@@ -284,25 +291,25 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
                   x = 1, y = -0.11, xanchor = "right", yanchor = "top",
                   showarrow = FALSE,
                   font = list(size = 10, color = "grey40"))))
-  
+
   # ── 8. heteroplasmy count per sample coloured by clade ───────────────────
   het_df  <- all_vars[all_vars$AF < min_hom_vaf, ]
   het_cnt <- as.data.frame(table(ID = het_df$ID))
   names(het_cnt)[2] <- "n_het"
-  
+
   het_cnt <- merge(all_ids, het_cnt, by = "ID", all.x = TRUE)
   het_cnt$n_het[is.na(het_cnt$n_het)] <- 0
-  
+
   het_cnt <- merge(het_cnt, meta[, c("ID", "clade")], by = "ID", all.x = TRUE)
   het_cnt$clade[is.na(het_cnt$clade)] <- "Unknown"
-  
+
   het_cnt$clade <- factor(het_cnt$clade,
                           levels = intersect(c("N/R", "M", "L", "Unknown"),
                                              unique(het_cnt$clade)))
-  
+
   set.seed(42)
   het_cnt$jitter_y <- runif(nrow(het_cnt), -0.4, 0.4)
-  
+
   p_het <- ggplot() +
     geom_histogram(data = het_cnt, aes(x = n_het, fill = clade, colour = clade),
                    binwidth = 1, alpha = 0.5, position = "identity") +
@@ -321,7 +328,7 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
          x = "# heteroplasmic variants", y = "# samples") +
     theme_minimal(base_size = 11) +
     theme(legend.position = "top")
-  
+
   var_plots$het_per_sample_clade <- ggplotly(p_het, tooltip = "text") |>
     layout(margin = list(t = 80, b = 80),
            annotations = list(
@@ -332,31 +339,31 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
                   x = 1, y = -0.11, xanchor = "right", yanchor = "top",
                   showarrow = FALSE,
                   font = list(size = 10, color = "grey40"))))
-  
+
   # ── 9. variant frequency spectrum (site frequency) ───────────────────────
   n_samples <- length(vcf_ok)
-  
+
   carrier_cnt <- aggregate(ID ~ POS + REF + ALT, data = all_vars, FUN = length)
   names(carrier_cnt)[4] <- "n_carriers"
-  
+
   var_freq <- merge(carrier_cnt, var_class_df, by = c("POS", "REF", "ALT"))
-  
+
   freq        <- var_freq$n_carriers / n_samples
   freq_levels <- c("singleton", "doubleton", "doubleton-1%", "1-5%", "5-10%", ">10%")
   var_freq$freq_cat <- factor(
     ifelse(var_freq$n_carriers == 1, "singleton",
-           ifelse(var_freq$n_carriers == 2, "doubleton",
-                  ifelse(freq <  0.01,             "doubleton-1%",
-                         ifelse(freq <= 0.05,             "1-5%",
-                                ifelse(freq <= 0.10,             "5-10%",  ">10%"))))),
+    ifelse(var_freq$n_carriers == 2, "doubleton",
+    ifelse(freq <  0.01,             "doubleton-1%",
+    ifelse(freq <= 0.05,             "1-5%",
+    ifelse(freq <= 0.10,             "5-10%",  ">10%"))))),
     levels = freq_levels)
-  
+
   # proportion of unique variants per frequency category, coloured by hom/het
   freq_tbl      <- as.data.frame(table(freq_cat  = var_freq$freq_cat,
                                        var_class = var_freq$var_class))
   total_vars    <- sum(freq_tbl$Freq)
   freq_tbl$prop <- freq_tbl$Freq / total_vars
-  
+
   var_plots$freq_spectrum <- ggplot(freq_tbl, aes(x = freq_cat, y = prop, fill = var_class)) +
     geom_col(position = "stack") +
     scale_fill_manual(values = class_cols, name = NULL) +
@@ -366,11 +373,11 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
     theme_minimal(base_size = 11) +
     theme(panel.grid.major.x = element_blank(),
           legend.position = "top")
-  
+
   # ── 10. summary pie charts ────────────────────────────────────────────────
   mt_genome_size <- 16569
   ti_pairs       <- c("AG", "GA", "CT", "TC")
-  
+
   # pie helper
   make_pie <- function(df, fill_col, n_col, colours, title) {
     df$pct <- 100 * df[[n_col]] / sum(df[[n_col]])
@@ -386,7 +393,7 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
       theme(legend.position  = "right",
             plot.title = element_text(face = "bold", size = 10, hjust = 0.5))
   }
-  
+
   # pie 1: mtDNA bases with/without variant
   n_var_bases <- length(unique(all_vars$POS))
   pie1_df <- data.frame(
@@ -396,7 +403,7 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
   pie1 <- make_pie(pie1_df, "category", "n",
                    c("variant" = "grey40", "no variant" = "grey80"),
                    sprintf("%d mtDNA bases", mt_genome_size))
-  
+
   # pie 2: unique variants — SNV transition / transversion / indel
   uniq_vars <- all_vars[!duplicated(all_vars[, c("POS", "REF", "ALT")]),
                         c("POS", "REF", "ALT")]
@@ -407,13 +414,13 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
   type_cnt <- as.data.frame(table(snv_type = uniq_vars$snv_type))
   names(type_cnt)[2] <- "n"
   type_cnt$snv_type <- factor(type_cnt$snv_type,
-                              levels = c("SNV transition", "SNV transversion", "indel"))
+                               levels = c("SNV transition", "SNV transversion", "indel"))
   pie2 <- make_pie(type_cnt, "snv_type", "n",
                    c("SNV transition"   = "#2E7D32",
                      "SNV transversion" = "#81C784",
                      "indel"            = "grey70"),
                    sprintf("%s unique variants", format(nrow(uniq_vars), big.mark = ",")))
-  
+
   # pie 3: unique variants — homoplasmic only / hom+het / heteroplasmic only
   class_cnt <- as.data.frame(table(var_class = var_class_df$var_class))
   names(class_cnt)[2] <- "n"
@@ -422,7 +429,7 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
                      "homoplasmic only"            = "#5B9BD5",
                      "homoplasmic/heteroplasmic"   = "#1A3A6B"),
                    sprintf("%s unique variants", format(nrow(var_class_df), big.mark = ",")))
-  
+
   # pie 4: variant calls — homoplasmic vs heteroplasmic
   calls_cnt <- as.data.frame(table(zygosity = all_vars$zygosity))
   names(calls_cnt)[2] <- "n"
@@ -430,9 +437,9 @@ if (!is.null(all_vars) && nrow(all_vars) > 0) {
                    c("Heteroplasmic" = "grey70",
                      "Homoplasmic"   = "#5B9BD5"),
                    sprintf("%s variant calls", format(sum(calls_cnt$n), big.mark = ",")))
-  
+
   var_plots$summary_pies <- (pie1 + pie2) / (pie3 + pie4)
-  
+
 }
 
 message(sprintf("[06_variants] Variant plots built. %d PASS variants across %d samples.",
