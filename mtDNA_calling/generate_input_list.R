@@ -1,46 +1,35 @@
 rm(list = ls())
 library(dplyr)
 
-setwd("/vast/scratch/users/chen.k")
+setwd(paste0("/vast/scratch/users/", Sys.getenv("USER")))
 
-bam_dirs <- c(
-  "/stornext/Bioinf/data/lab_bahlo/projects/ataxia/GRREAT/bams",
-  "/stornext/Bioinf/data/lab_bahlo/projects/ataxia/GRREAT/bams/macrogen/bam"
-)
+bam_dirs <- c("/path/to/bam/1", "/path/to/bam/2")
 
-# get bam files
-bam <- unlist(lapply(
-  bam_dirs,
-  list.files,
-  pattern = "\\.bam$",
-  full.names = TRUE
-))
-
+bam <- unlist(lapply(bam_dirs, list.files, pattern = "\\.bam$", full.names = TRUE))
 bam_names <- basename(bam)
-
 sample <- sub("\\.merged\\.bam$", "", bam_names)
 
-bai <- paste0(bam, ".bai") # expected bai paths
-bai[!file.exists(bai)] <- NA # replace missing bai files with NA
+bai <- paste0(bam, ".bai")
+bai[!file.exists(bai)] <- NA
 
+input <- data.frame(sample = sample, bam = bam, bai = bai, stringsAsFactors = FALSE)
 
-input <- data.frame(
-  sample = sample,
-  bam = bam,
-  bai = bai,
-  stringsAsFactors = FALSE
-)
+# BAI check
+no_bai_files <- input %>% filter(is.na(bai))
+if (nrow(no_bai_files) > 0) {
+  message("WARNING: ", nrow(no_bai_files), " BAM file(s) are missing index (.bai). Generate them with:\n",
+          paste0("  samtools index ", no_bai_files$bam, collapse = "\n"),
+          "\nThese samples will be excluded from the output.")
+}
 
-no_bai_files <- input %>% filter(is.na(bai)) # check if any bai files are not present
-
+# Duplicate check
 dup_samples <- unique(input$sample[duplicated(input$sample) | duplicated(input$sample, fromLast = TRUE)])
+if (length(dup_samples) > 0) {
+  dup_info <- input %>% filter(sample %in% dup_samples) %>% select(sample, bam)
+  message("WARNING: ", length(dup_samples), " duplicate sample name(s) detected:\n",
+          paste0("  ", dup_info$sample, " -> ", dup_info$bam, collapse = "\n"),
+          "\nAction required: either exclude the duplicate samples or assign unique names before proceeding.")
+}
 
-input$sample <- ifelse(
-  input$sample %in% dup_samples &
-    !grepl("macrogen", input$bam, ignore.case = TRUE),
-  paste0(input$sample, "-vcgs"),
-  input$sample
-)
 filtered_input <- input %>% filter(!is.na(bai))
-
-write.table(filtered_input, "input_list_complete.txt", row.names = F, quote = F, sep = "\t")
+write.table(filtered_input, "input_list_complete.txt", row.names = FALSE, quote = FALSE, sep = "\t")
