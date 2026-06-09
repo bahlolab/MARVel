@@ -94,23 +94,21 @@ cohort_label <- "My cohort"
 
 ## Running
 
-From R (set working directory to the folder containing `config.R` and `report.Rmd`):
-
-```r
-setwd("/path/to/mtDNA_report/")
-
-rmarkdown::render(
-  "report.Rmd",
-  output_file = paste0("mtDNA_report_", Sys.Date(), ".html")
-)
-```
-
-Or from the shell:
+Use the provided `render.R` wrapper — it ensures the correct `config.R` is sourced and writes the HTML to `report_dir` as set in your config.
 
 ```bash
 cd /path/to/mtDNA_report/
-Rscript -e "rmarkdown::render('report.Rmd', output_file = paste0('mtDNA_report_', Sys.Date(), '.html'))"
+Rscript render.R
 ```
+
+Or from R:
+
+```r
+setwd("/path/to/mtDNA_report/")
+source("render.R")
+```
+
+> **Important:** always run from the `mtDNA_report/` directory. If you call `rmarkdown::render()` directly from a different working directory, R will pick up the wrong `config.R` and write output to the wrong location.
 
 Runtime is roughly 5–15 minutes for ~500 samples, depending on VCF parsing speed.
 
