@@ -6,17 +6,19 @@ library(fs)
 # ================================
 # INPUTS
 # ================================
-files <- read.table("/vast/scratch/users/chen.k/input_list_complete.txt", header = T, sep = "\t")
-sh_dir <- "/vast/scratch/users/chen.k/sh_scripts_ataxia"  # folder to write per-row shell scripts
+files <- read.table(paste0("/vast/scratch/users/", Sys.getenv("USER"), "/input_list_complete.txt"), header = T, sep = "\t")
+sh_dir <- paste0("/vast/scratch/users/", Sys.getenv("USER"), "/sh_scripts")  # folder to write per-row shell scripts
+if(!(dir.exists(sh_dir))) dir.create(sh_dir)
 combined_sh <- file.path(sh_dir, "run_all_full.sh")  # combined sbatch script
-download_base <- "/vast/projects/bahlo_mtDNA/Results_ataxia"  # base folder for downloads
+download_base <- "/path/to/download"  # base folder for downloads
+if(!(dir.exists(download_base))) dir.create(download_base)
 
 # SBATCH settings
 sbatch_time <- "24:00:00"
 sbatch_mem <- "8G"
 sbatch_nodes <- 1
 sbatch_cpus <- 8
-sbatch_email <- "chen.k@wehi.edu.au"
+sbatch_email <- "<email address>"
 
 # ================================
 # Create per-row shell scripts
@@ -79,15 +81,7 @@ for (i in seq_len(nrow(files))) {
 # ================================
 combined_content <- c(
   "#!/bin/bash",
-  paste0("#SBATCH --time=", sbatch_time),
-  paste0("#SBATCH --mem=", sbatch_mem),
-  paste0("#SBATCH --nodes=", sbatch_nodes),
-  paste0("#SBATCH --cpus-per-task=", sbatch_cpus),
-  paste0("#SBATCH --job-name=combined_run"),
-  paste0("#SBATCH --error=combined_run.err"),
-  paste0("#SBATCH --output=combined_run.out"),
-  paste0("#SBATCH --mail-user=", sbatch_email),
-  "cd /vast/scratch/users/chen.k/sh_scripts_ataxia/logs",
+  paste0("cd ",sh_dir,"/logs"),
   ""
 )
 
