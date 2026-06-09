@@ -1,98 +1,98 @@
-# MitoHPC : Mitochondrial High Performance Caller #
+# MitoHPC: Mitochondrial High Performance Caller
 
-This tool has been installed at:
-```
-/stornext/Bioinf/data/lab_bahlo/software/apps/MitoHPC/
-```
-How it's installed: [install.sh](https://github.com/bahlolab/mtdna-benchmark/blob/main/mtDNA_calling/install.sh)
+Scripts for running [MitoHPC](https://github.com/dpuiu/MitoHPC) — a pipeline for estimating mitochondrial DNA copy number and heteroplasmy from whole-genome sequencing data.
 
-## Citing ##
+## Citation
 
-A bioinformatics pipeline for estimating mitochondrial DNA copy number and heteroplasmy levels from whole genome sequencing data, Battle et. al, NAR 2022
-https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9112767/ 
+Battle et al. (2022). A bioinformatics pipeline for estimating mitochondrial DNA copy number and heteroplasmy levels from whole genome sequencing data. *Nucleic Acids Research*. https://doi.org/10.1093/nar/gkac290
 
-## PIPELINE USAGE ##
+---
 
-### SETUP ENVIRONMENT ###
+## Installation
+
+See [install.sh](install.sh) for a minimal setup. In brief:
 
 ```bash
-# Move to your working directory
-cd /vast/scratch/users/$USER/1000G/mitoHPC
-
-# Define the path to the MitoHPC scripts
-HP_SDIR=/stornext/Bioinf/data/lab_bahlo/software/apps/MitoHPC/scripts
-
-# Copy the parameter initialization script (with prompt before overwriting)
-cp -i $HP_SDIR/init.sh .
-
-# View and edit the init file if needed (e.g., update paths)
-cat init.sh
-nano init.sh
-
-# ⚠️ IMPORTANT: Update this line in init.sh if needed
-# export HP_ADIR=/vast/scratch/users/wang.lo/1000G/data/WGS
-
-# set no subsampling for more accurate heteroplasmy level
-# export HP_L=
-
-# Source the init file to load environment variables
-. ./init.sh    # or: source ./init.sh
-
-# Verify HP_ variables are correctly set
-printenv | grep '^HP_' | sort
-
-# View input file (if present)
-nano "$HP_IN"
-
+git clone https://github.com/dpuiu/MitoHPC.git
+cd MitoHPC/scripts
+export HP_SDIR=$(pwd)
+. ./init.sh   # or init.hs38DH.sh / init.hg19.sh / init.mm39.sh
+$HP_SDIR/install_prerequisites.sh
+$HP_SDIR/checkInstall.sh
 ```
 
-### RUN PIPELINE  ###
+---
+
+## Single-sample usage
+
+### 1. Set up working directory
 
 ```bash
-# Generate the command script from run.sh and save it as run.all.sh
-$HP_SDIR/run.sh > run.all.sh
+mkdir -p /path/to/workdir && cd /path/to/workdir
 
-# Execute the generated command script
-# Stdout and stderr will be logged in output.log
-bash ./run.all.sh > output.log 2>&1
-# /usr/bin/time -v bash ./run.all.sh > output.log 2>&1
+HP_SDIR=/path/to/MitoHPC/scripts
+cp $HP_SDIR/init.sh .
 ```
 
-
-### RE-RUN PIPELINE (optional) ###
+Edit `init.sh` to set `HP_ADIR` (directory containing your BAM) and any other parameters (e.g. set `HP_L=` to disable subsampling for more accurate heteroplasmy estimation).
 
 ```bash
-cd /vast/scratch/users/$USER/1000G/mitoHPC
-
-# Set the path to the MitoHPC script directory
-HP_SDIR=/stornext/Bioinf/data/lab_bahlo/software/apps/MitoHPC/scripts
-
-# Remove old input file if it exists
-rm -f in.txt
-
-# Edit parameters as needed (e.g., input/output directories, sample list)
-nano init.sh
-
-# Load updated configuration into the current shell session
 . ./init.sh
-
-# Regenerate the full command script based on current settings
-$HP_SDIR/run.sh > run.all.sh
-
-# Execute the pipeline and log all output
-bash ./run.all.sh > output.log 2>&1
-
+printenv | grep '^HP_' | sort   # verify
 ```
 
-## PIPELINE USAGE (for multiple samples) ##
+### 2. Create input file
 
-### Step 1: Set up input table ###
-* Run [generate_input_list.R](https://github.com/bahlolab/mtdna-benchmark/blob/main/mtDNA_calling/generate_input_list.R) to generate input file 
+`in.txt` is a tab-separated file with three columns (no header): sample name, BAM path, output prefix.
 
-### Step 2: Run multiple samples ###
-* Using the input file from Step 1, run [run_multisample.R](https://github.com/bahlolab/mtdna-benchmark/blob/main/mtDNA_calling/run_multisample.R) to generate a script file for each input sample
-* Run combined shell file to run all samples
+```
+SAMPLE001	/path/to/SAMPLE001.bam	out/SAMPLE001/SAMPLE001
+```
+
+### 3. Run
 
 ```bash
-sbatch /path/to/combined/run_all.sh
+$HP_SDIR/run.sh > run.all.sh
+bash ./run.all.sh > output.log 2>&1
 ```
+
+---
+
+## Multi-sample usage (SLURM)
+
+### Step 1: Generate input table
+
+Edit the paths in [generate_input_list.R](generate_input_list.R) then run:
+
+```bash
+Rscript generate_input_list.R
+```
+
+This scans BAM directories, checks for missing indices, warns on duplicate sample names, and writes `input_list_complete.txt`.
+
+### Step 2: Generate per-sample SLURM scripts
+
+Edit paths and SBATCH settings in [run_multisample.R](run_multisample.R) then run:
+
+```bash
+Rscript run_multisample.R
+```
+
+This writes one `.sh` script per sample under `sh_scripts/`, plus a combined `sh_scripts/run_all.sh`.
+
+### Step 3: Submit
+
+```bash
+bash sh_scripts/run_all.sh
+```
+
+---
+
+## Key parameters in `init.sh`
+
+| Variable  | Description                                              |
+|-----------|----------------------------------------------------------|
+| `HP_ADIR` | Directory containing input BAM files                     |
+| `HP_IN`   | Path to input file (`in.txt`)                            |
+| `HP_L`    | Subsampling depth (leave blank for no subsampling)       |
+| `HP_M`    | Variant caller (`gatk` default; `mutect2` also supported)|
