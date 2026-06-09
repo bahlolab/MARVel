@@ -86,6 +86,20 @@ This writes one `.sh` script per sample under `sh_scripts/`, plus a combined `sh
 bash sh_scripts/run_all.sh
 ```
 
+### Step 4: Check for incomplete jobs (optional)
+
+After jobs finish, run [check_jobs.R](check_jobs.R) to identify any samples that did not complete:
+
+```bash
+Rscript check_jobs.R
+```
+
+This checks for expected mitoHPC output files per sample and writes `rerun_failed.sh` listing any incomplete jobs. Submit with:
+
+```bash
+bash rerun_failed.sh
+```
+
 ---
 
 ## Key parameters in `init.sh`
