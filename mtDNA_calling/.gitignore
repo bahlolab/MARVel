@@ -1,0 +1,5 @@
+sh_scripts/
+input_list_complete.txt
+*.log
+*.err
+*.out
