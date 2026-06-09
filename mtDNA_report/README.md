@@ -62,7 +62,7 @@ Each sample must have the following files under `<results_root>/<ID>/mitoHPC/out
 
 mtDNA copy number is read from `count.tab` (cohort-level tab file in the sample output directory).
 
-Sample IDs are auto-discovered as subdirectories of `results_root` starting with `"AA"`. Override by setting `cohort_ids` in `config.R`.
+Sample IDs are auto-discovered as all immediate subdirectories of `results_root`. Use `cohort_id_pattern` (a regex string) in `config.R` to filter by name, or supply `cohort_ids` explicitly.
 
 ---
 
@@ -77,15 +77,16 @@ report_dir   <- "/path/to/output/directory"  # where the report and QC TSV are w
 pca_dir      <- file.path(report_dir, "1000G")
 
 # Sample discovery
-cohort_ids <- NULL   # NULL = auto-discover all "AA*" subdirs
-                     # or supply a vector: c("AA0001-01", "AA0002-01")
+cohort_ids        <- NULL   # NULL = auto-discover all subdirs of results_root
+cohort_id_pattern <- NULL   # optional regex filter, e.g. "^SAMPLE" or "^AA"
+                             # supply cohort_ids explicitly to bypass discovery
 
 # QC thresholds
 min_median_depth  <- 100    # flag samples with median depth below this
 contam_threshold  <- 0.02   # flag samples with haplocheck level >= this
 min_hom_vaf       <- 0.95   # VAF threshold for homoplasmic classification
 
-# Cohort label (appears in report title)
+# Cohort label (appears in the report title)
 cohort_label <- "My cohort"
 ```
 
