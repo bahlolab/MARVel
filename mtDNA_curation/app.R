@@ -10,19 +10,26 @@ suppressPackageStartupMessages(library(tidyverse))
 # Set MTDNA_DB_DIR environment variable to override (e.g. on HPC).
 # Otherwise defaults to database/ sibling folder next to this app.
 # DB_DIR <- "/stornext/Bioinf/data/lab_bahlo/ref_db/human/mtDNA/"
-APP_DIR <- normalizePath(getSrcDirectory(function() {}), mustWork = FALSE)
-if (is.na(APP_DIR) || nchar(APP_DIR) == 0) APP_DIR <- getwd()
+APP_DIR <- tryCatch(
+  normalizePath(dirname(sys.frame(1)$ofile), mustWork = FALSE),
+  error = function(e) getwd()
+)
 DB_DIR <- Sys.getenv("MTDNA_DB_DIR",
-                     unset = file.path(dirname(APP_DIR), "database"))
+                      unset = file.path(APP_DIR, "database"))
 
-GNOMAD_FILE  <- file.path(DB_DIR, "gnomad",
-                          "gnomad_chrM_hap_AF.tsv.gz")       # produced by prepare_databases.R
-MITOMAP_CDS  <- file.path(DB_DIR, "MITOMAP",
-                          "MutationsCodingControl_MITOMAP_Foswiki_reported_and_clin_conf_20_03_2026_VAR.csv")
-MITOMAP_TRNA <- file.path(DB_DIR, "MITOMAP",
-                          "MutationstRNA_MITOMAP_Foswiki_reported_and_clin_conf_16_04_2026_VAR.csv")
-MITOTIP_FILE <- file.path(DB_DIR, "MitoTIP",
-                          "mitotip_scores_27_04_2020_VAR.txt")
+GNOMAD_FILE  <- file.path(DB_DIR, "gnomad", "gnomad_chrM_hap_AF.tsv.gz")  # from prepare_databases.R
+MITOTIP_FILE <- file.path(DB_DIR, "MitoTIP", "mitotip_scores_27_04_2020_VAR.txt")
+
+# MITOMAP filenames include download dates — discover by pattern rather than hardcoding
+find_mitomap <- function(db_dir, pattern) {
+  hits <- list.files(file.path(db_dir, "MITOMAP"), pattern = pattern,
+                     full.names = TRUE, ignore.case = TRUE)
+  if (length(hits) == 0) return(NULL)
+  if (length(hits) > 1) message("Multiple MITOMAP files matched '", pattern, "', using: ", hits[1])
+  hits[1]
+}
+MITOMAP_CDS  <- find_mitomap(DB_DIR, "MutationsCodingControl.*_VAR\\.csv$")
+MITOMAP_TRNA <- find_mitomap(DB_DIR, "MutationstRNA.*_VAR\\.csv$")
 
 BLACKLIST_POS <- c(301, 302, 310, 316, 3107, 5894, 10933, 16179,
                    16181, 16182, 16183, 16188, 16189, 16192)
@@ -54,10 +61,10 @@ load_gnomad <- function(db_dir) {
 # conceptually so we harmonise to: MITOMAP_locus, MITOMAP_disease,
 # MITOMAP_status, MITOMAP_gb_freq, MITOMAP_gb_seqs
 load_mitomap <- function(db_dir) {
-  mitomap_cds  <- file.path(db_dir, "MITOMAP", "MutationsCodingControl_MITOMAP_Foswiki_reported_and_clin_conf_20_03_2026_VAR.csv")
-  mitomap_trna <- file.path(db_dir, "MITOMAP", "MutationstRNA_MITOMAP_Foswiki_reported_and_clin_conf_16_04_2026_VAR.csv")
+  mitomap_cds  <- find_mitomap(db_dir, "MutationsCodingControl.*_VAR\\.csv$")
+  mitomap_trna <- find_mitomap(db_dir, "MutationstRNA.*_VAR\\.csv$")
   rows <- list()
-  
+
   if (file.exists(mitomap_cds)) {
     message("MITOMAP CDS: loading ", mitomap_cds)
     cds <- as.data.frame(fread(mitomap_cds))
@@ -73,9 +80,9 @@ load_mitomap <- function(db_dir) {
     cds$MITOMAP_gb_freq <- if (!is.na(gb_freq_col)) cds[[gb_freq_col]] else NA
     cds$MITOMAP_gb_seqs <- if (!is.na(gb_seq_col))  cds[[gb_seq_col]]  else NA
     rows[["cds"]] <- cds[, c("VAR","MITOMAP_locus","MITOMAP_disease","MITOMAP_status",
-                             "MITOMAP_plasmy","MITOMAP_gb_freq","MITOMAP_gb_seqs")]
+                              "MITOMAP_plasmy","MITOMAP_gb_freq","MITOMAP_gb_seqs")]
   }
-  
+
   if (file.exists(mitomap_trna)) {
     message("MITOMAP tRNA: loading ", mitomap_trna)
     trna <- as.data.frame(fread(mitomap_trna))
@@ -93,9 +100,9 @@ load_mitomap <- function(db_dir) {
     trna$MITOMAP_gb_freq <- if (!is.na(gb_freq_col)) trna[[gb_freq_col]] else NA
     trna$MITOMAP_gb_seqs <- if (!is.na(gb_seq_col))  trna[[gb_seq_col]]  else NA
     rows[["trna"]] <- trna[, c("VAR","MITOMAP_locus","MITOMAP_disease","MITOMAP_status",
-                               "MITOMAP_plasmy","MITOMAP_gb_freq","MITOMAP_gb_seqs")]
+                                "MITOMAP_plasmy","MITOMAP_gb_freq","MITOMAP_gb_seqs")]
   }
-  
+
   if (length(rows) == 0) return(NULL)
   # Multiple MITOMAP entries per VAR are possible; collapse with " | "
   combined <- bind_rows(rows)
@@ -130,11 +137,11 @@ parse_vcf <- function(vcf_file, sample_id) {
   hdr      <- which(startsWith(lines, "#CHROM"))[1]
   data_lines <- lines[(hdr + 1):length(lines)]
   if (length(data_lines) == 0) return(data.frame())
-  
+
   vcf <- read.table(text = data_lines, sep = "\t", header = FALSE,
                     stringsAsFactors = FALSE, quote = "")
   colnames(vcf) <- c("CHROM","POS","rsID","REF","ALT","QUAL","FILTER","INFO","FORMAT","SAMPLE")
-  
+
   parse_info <- function(info_str) {
     fields <- strsplit(info_str, ";")[[1]]
     out <- list()
@@ -153,9 +160,9 @@ parse_vcf <- function(vcf_file, sample_id) {
     if (is.null(v) || isFALSE(v)) NA_character_ else as.character(v)
   }
   get_flag <- function(lst, key) !is.null(lst[[key]]) && !isFALSE(lst[[key]])
-  
+
   info_list <- lapply(vcf$INFO, parse_info)
-  
+
   # GT:DP:AF are in FORMAT/SAMPLE columns, not INFO
   fmt_keys <- strsplit(vcf$FORMAT[1], ":", fixed = TRUE)[[1]]
   samp_vals <- strsplit(vcf$SAMPLE, ":", fixed = TRUE)
@@ -180,7 +187,7 @@ parse_vcf <- function(vcf_file, sample_id) {
   dloop_flag        <- sapply(info_list, get_flag, "DLOOP")
   vcf$Homopolymer <- sapply(info_list, get_flag, "Homopolymer")
   vcf$is_INDEL    <- sapply(info_list, get_flag, "INDEL")
-  
+
   vcf$Region <- case_when(
     !is.na(vcf$CDS) ~ paste0("CDS:", vcf$CDS),
     !is.na(vcf$RNR) ~ paste0("rRNA:", vcf$RNR),
@@ -191,7 +198,7 @@ parse_vcf <- function(vcf_file, sample_id) {
   vcf$Gene     <- coalesce(vcf$CDS, vcf$RNR, vcf$TRN)
   vcf$VAR      <- paste0(vcf$POS, "_", vcf$REF, "_", vcf$ALT)
   vcf$SampleID <- sample_id
-  
+
   vcf[, c("SampleID","VAR","POS","REF","ALT","rsID","FILTER","VAF","DP","GT",
           "Region","Gene","COMPLEX","MLC_consq","AP","APS",
           "MLC_score","MCC","Hypervariable",
@@ -209,18 +216,18 @@ load_sample <- function(sample_folder, sample_id = NULL) {
   if (length(hits) == 0) stop(paste("No mutect2.00 VCF found under:", sample_folder))
   if (length(hits) > 1)  message(sprintf("Multiple VCFs found for %s, using first: %s", sample_id, hits[1]))
   vcf_file <- hits[1]
-  
+
   vars <- parse_vcf(vcf_file, sample_id)
-  
+
   hg_file <- file.path(sample_folder, "out", "mutect2.haplogroup.tab")
   haplogroup <- if (file.exists(hg_file)) fread(hg_file)$haplogroup[1] else NA_character_
-  
+
   cvg_file <- file.path(sample_folder, "out", "count.tab")
   coverage  <- if (file.exists(cvg_file)) as.data.frame(fread(cvg_file)) else NULL
-  
+
   hc_file   <- file.path(sample_folder, "out", "mutect2.haplocheck.tab")
   haplocheck <- if (file.exists(hc_file)) as.data.frame(fread(hc_file)) else NULL
-  
+
   list(vars = vars, haplogroup = haplogroup,
        coverage = coverage, haplocheck = haplocheck,
        sample_id = sample_id)
@@ -248,7 +255,7 @@ load_all_samples <- function(manifest_path) {
 # ---------------------------------------------------------------------------
 merge_variants <- function(samples_list) {
   if (length(samples_list) == 0) return(data.frame())
-  
+
   all_vars <- lapply(names(samples_list), function(sid) {
     s   <- samples_list[[sid]]
     dat <- s$vars
@@ -262,8 +269,20 @@ merge_variants <- function(samples_list) {
     dat$blacklist <- dat$POS %in% BLACKLIST_POS
     dat
   })
-  
-  bind_rows(all_vars)
+
+  merged <- bind_rows(all_vars)
+
+  # Cohort-level allele frequencies per VAR
+  n_samples <- length(samples_list)
+  cohort_ac <- merged |>
+    group_by(VAR) |>
+    summarise(
+      cohort_AC_hom = sum(genotype == "hom", na.rm = TRUE),
+      cohort_AC_het = sum(genotype == "het", na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  left_join(merged, cohort_ac, by = "VAR")
 }
 
 # ---------------------------------------------------------------------------
@@ -276,7 +295,7 @@ annotate_variants <- function(vars, db) {
   }
   if (!is.null(db$mitomap)) vars <- left_join(vars, db$mitomap, by = "VAR")
   if (!is.null(db$mitotip)) vars <- left_join(vars, db$mitotip, by = "VAR")
-  
+
   if (!is.null(db$gnomad)) {
     # For each row look up its own haplogroup-specific AF
     match_hap <- function(hap) {
@@ -285,27 +304,27 @@ annotate_variants <- function(vars, db) {
       NA_character_
     }
     hap_matched <- sapply(vars$haplogroup, match_hap)
-    
+
     vars$gnomAD_hap_AF_hom <- mapply(function(hap, i) {
       col <- paste0("hap_AF_hom_", hap)
       if (!is.na(hap) && col %in% colnames(vars)) vars[[col]][i] else NA_real_
     }, hap_matched, seq_len(nrow(vars)))
-    
+
     vars$gnomAD_hap_AF_het <- mapply(function(hap, i) {
       col <- paste0("hap_AF_het_", hap)
       if (!is.na(hap) && col %in% colnames(vars)) vars[[col]][i] else NA_real_
     }, hap_matched, seq_len(nrow(vars)))
-    
+
     # Drop raw 58-column arrays
     vars <- vars[, !(colnames(vars) %in% c(paste0("hap_AF_hom_", HAP_ORDER),
-                                           paste0("hap_AF_het_", HAP_ORDER)))]
+                                            paste0("hap_AF_het_", HAP_ORDER)))]
   }
-  
+
   # Clickable links
   vars$gnomAD_link <- sprintf(
     '<a href="https://gnomad.broadinstitute.org/variant/M-%d-%s-%s?dataset=gnomad_r3" target="_blank">gnomAD</a>',
     vars$POS, vars$REF, vars$ALT)
-  
+
   vars
 }
 
@@ -317,40 +336,78 @@ load_fam <- function(fam_path) {
   colnames(fam) <- c("FamilyID","IndividualID","FatherID","MotherID","Sex","Affected")
   fam$Sex    <- ifelse(fam$Sex == 1, "male", ifelse(fam$Sex == 2, "female", "unknown"))
   fam$Status <- case_when(fam$Affected == 2 ~ "affected",
-                          fam$Affected == 1 ~ "unaffected",
-                          TRUE              ~ "unknown")
+                           fam$Affected == 1 ~ "unaffected",
+                           TRUE              ~ "unknown")
   fam
 }
 
 # ---------------------------------------------------------------------------
-# Maternal inheritance filter
-# mode: "all" | "maternal_shared" | "de_novo"
+# Family inheritance filter
+# mode: "all" | "shared" | "de_novo"
+#
+# Comparators (used for shared / de novo):
+#   - Mother if present in the dataset
+#   - Siblings: same FamilyID + same MotherID as proband (if mother known),
+#     otherwise all other loaded family members
+# At least one comparator must be present in the loaded data.
 # ---------------------------------------------------------------------------
-maternal_filter <- function(vars, fam, family_id, proband_id, mode) {
-  if (mode == "all") return(vars)
-  
+# Family filter
+# Determines the family member set (proband + mother + siblings on maternal line),
+# restricts vars to those members, then applies mode:
+#
+#   all      — all variants for all family members
+#   shared   — variants present in every family member (intersection)
+#   de_novo  — variants not shared by all members (symmetric difference:
+#               unique to proband OR unique to one or more other members)
+#
+# vars: variant table already filtered by other criteria (all samples present)
+family_filter <- function(vars, fam, family_id, proband_id, mode) {
   fam_sub     <- fam[fam$FamilyID == family_id, ]
   proband_row <- fam_sub[fam_sub$IndividualID == proband_id, ]
   if (nrow(proband_row) == 0) stop("Proband not found in FAM file.")
-  
-  # Long format: filter rows belonging to proband
-  proband_vars <- vars[vars$SampleID == proband_id, ]
-  if (nrow(proband_vars) == 0) stop(paste("No variants found for proband:", proband_id))
-  
+
   mother_id  <- proband_row$MotherID
-  has_mother <- mother_id != "0" && mother_id %in% vars$SampleID
-  
-  if (mode == "maternal_shared") {
-    if (!has_mother) stop("Mother not found in dataset.")
-    mother_vars <- vars$VAR[vars$SampleID == mother_id & !is.na(vars$VAF) & vars$VAF > 0]
-    proband_vars <- proband_vars[proband_vars$VAR %in% mother_vars, ]
+  has_mother <- !is.null(mother_id) && !is.na(mother_id) &&
+                mother_id != "0" && mother_id %in% vars$SampleID
+
+  # Siblings: same maternal lineage as proband
+  if (has_mother) {
+    sib_ids <- fam_sub$IndividualID[
+      !is.na(fam_sub$MotherID) & fam_sub$MotherID == mother_id &
+      fam_sub$IndividualID != proband_id &
+      fam_sub$IndividualID %in% vars$SampleID
+    ]
+  } else {
+    sib_ids <- fam_sub$IndividualID[
+      fam_sub$IndividualID != proband_id &
+      fam_sub$IndividualID %in% vars$SampleID
+    ]
   }
-  if (mode == "de_novo") {
-    if (!has_mother) stop("Mother not found in dataset.")
-    mother_vars <- vars$VAR[vars$SampleID == mother_id & !is.na(vars$VAF) & vars$VAF > 0]
-    proband_vars <- proband_vars[!(proband_vars$VAR %in% mother_vars), ]
-  }
-  proband_vars
+
+  member_ids <- unique(c(proband_id, if (has_mother) mother_id, sib_ids))
+  if (length(member_ids) == 0) stop("No family members found in the loaded dataset.")
+  message("Family members: ", paste(member_ids, collapse = ", "))
+
+  # Restrict to family members
+  family_vars <- vars[vars$SampleID %in% member_ids, ]
+  if (nrow(family_vars) == 0) stop("No variants found for any family member.")
+  if (mode == "all") return(family_vars)
+
+  # VAR counts across members — basis for shared / de_novo
+  vars_per_member <- tapply(family_vars$VAR, family_vars$SampleID,
+                            function(v) unique(v[!is.na(v)]))
+  n_members   <- length(member_ids)
+  unique_vars  <- unique(family_vars$VAR)
+  var_n_members <- sapply(unique_vars, function(v)
+    sum(sapply(vars_per_member, function(vv) v %in% vv)))
+
+  if (mode == "shared")
+    return(family_vars[family_vars$VAR %in% unique_vars[var_n_members == n_members], ])
+
+  if (mode == "de_novo")
+    return(family_vars[family_vars$VAR %in% unique_vars[var_n_members <  n_members], ])
+
+  family_vars
 }
 
 # ---------------------------------------------------------------------------
@@ -372,96 +429,98 @@ dt_options <- list(
 ui <- navbarPage(
   title = "mtDNA Variant Curation",
   theme = shinytheme("cerulean"),
-  
+
   # --- Home ---
   tabPanel(icon("home"),
-           h1("mtDNA Variant Curation"),
-           br(),
-           h3("Overview"),
-           p("Interactive viewer for mitochondrial DNA variant calls from short-read sequencing.
+    h1("mtDNA Variant Curation"),
+    br(),
+    h3("Overview"),
+    p("Interactive viewer for mitochondrial DNA variant calls from short-read sequencing.
       Variants are called with Mutect2 using the GATK mitochondrial pipeline.
       Reference annotations are loaded from the local database at startup:
       gnomAD v3.1, MITOMAP, and mitoTIP (when available)."),
-           
-           h4("Input files"),
-           p(strong("Manifest (TSV, required)"), "— columns:",
-             code("SampleID"), ",", code("FamilyID"), "(optional),",
-             code("SampleFolder"), "(absolute path). The app reads",
-             code("*.mutect2.mutect2.00.vcf"), "found recursively under", code("out/"), "in each folder."),
-           p(strong("FAM file (optional)"), "— PLINK format (6 columns: FamilyID, IndividualID,
+
+    h4("Input files"),
+    p(strong("Manifest (TSV, required)"), "— columns:",
+      code("SampleID"), ",", code("FamilyID"), "(optional),",
+      code("SampleFolder"), "(absolute path). The app reads",
+      code("*.mutect2.mutect2.00.vcf"), "found recursively under", code("out/"), "in each folder."),
+    p(strong("FAM file (optional)"), "— PLINK format (6 columns: FamilyID, IndividualID,
       FatherID, MotherID, Sex, Affected). Required for maternal inheritance analysis."),
-           
-           h4("Variant filters"),
-           tags$ul(
-             tags$li(strong("AF threshold"), "— Mutect2 calling threshold: 03/05/10 (%)"),
-             tags$li(strong("Min heteroplasmy"), "— further AF cutoff across all samples"),
-             tags$li(strong("PASS only"), "— require FILTER = PASS in all samples"),
-             tags$li(strong("Exclude D-loop / Hypervariable"), "— remove control region variants"),
-             tags$li(strong("Region"), "— CDS, rRNA, tRNA, D-loop, or All"),
-             tags$li(strong("Gene"), "— comma-separated (e.g.", code("ND1,COX1"), ") or All")
-           ),
-           
-           h4("Family / maternal inheritance"),
-           p("mtDNA is strictly maternally inherited — no paternal contribution, no compound het.
-      Three modes:"),
-           tags$ul(
-             tags$li(strong("All"), "— all variants in proband"),
-             tags$li(strong("Maternal shared"), "— present in proband AND mother (AF > 0)"),
-             tags$li(strong("De novo / somatic"), "— present in proband, absent in mother (AF = 0 or not called)")
-           ),
-           br(), br()
+
+    h4("Variant filters"),
+    tags$ul(
+      tags$li(strong("AF threshold"), "— Mutect2 calling threshold: 03/05/10 (%)"),
+      tags$li(strong("Min heteroplasmy"), "— further AF cutoff across all samples"),
+      tags$li(strong("PASS only"), "— require FILTER = PASS in all samples"),
+      tags$li(strong("Exclude D-loop / Hypervariable"), "— remove control region variants"),
+      tags$li(strong("Region"), "— CDS, rRNA, tRNA, D-loop, or All"),
+      tags$li(strong("Gene"), "— comma-separated (e.g.", code("ND1,COX1"), ") or All")
+    ),
+
+    h4("Family analysis"),
+    p("mtDNA is strictly maternally inherited — no paternal contribution, no compound het.
+      Comparators are mother (if loaded) and/or siblings (same family, same maternal line).
+      Works with mother-only, sibling-only, or mixed families. Three modes:"),
+    tags$ul(
+      tags$li(strong("All"), "— all variants in proband (no family filter)"),
+      tags$li(strong("Shared"), "— present in proband AND at least one comparator (mother or sibling, AF > 0)"),
+      tags$li(strong("De novo"), "— present in proband, absent in all comparators (AF = 0 or not called)")
+    ),
+    br(), br()
   ),
-  
+
   # --- Variants ---
   tabPanel("Variants",
-           fluidPage(
-             headerPanel("mtDNA Variant List"),
-             sidebarPanel(width = 3,
-                          h4("Input"),
-                          textInput("db_dir", "Database directory", value = DB_DIR),
-                          textInput("manifest_file", "Manifest file (path)",
-                                    placeholder = "/path/to/manifest.tsv"),
-                          textInput("fam_file", "FAM file (path, optional)",
-                                    placeholder = "/path/to/cohort.fam"),
-                          hr(),
-                          h4("Variant filters"),
-                          numericInput("min_af", "Min heteroplasmy level / VAF", value = 0.03, min = 0, max = 1, step = 0.01),
-                          numericInput("max_gnomad_af", "Max gnomAD AF (leave 1 to skip)", value = 1, min = 0, max = 1, step = 0.001),
-                          checkboxInput("pass_only",        "PASS only",             value = FALSE),
-                          checkboxInput("excl_strand_bias", "Exclude strand bias",  value = TRUE),
-                          checkboxInput("exclude_hv",       "Exclude hypervariable", value = FALSE),
-                          checkboxInput("exclude_blacklist", "Exclude blacklist",        value = TRUE),
-                          checkboxInput("exclude_synonymous", "Exclude synonymous",     value = FALSE),
-                          selectInput("region_filter", "Region",
-                                      choices = c("All","CDS","rRNA","tRNA","D-loop"), selected = "All"),
-                          textInput("gene_filter",   "Gene (e.g. ND1,COX1 or All)", value = "All"),
-                          textInput("sample_filter", "Sample ID (leave blank for all)", value = ""),
-                          hr(),
-                          h4("Family / maternal analysis"),
-                          textInput("family_id",  "Family ID",  value = ""),
-                          textInput("proband_id", "Proband ID", value = ""),
-                          selectInput("maternal_mode", "Maternal filter",
-                                      choices = c("All"                = "all",
-                                                  "Maternal shared"    = "maternal_shared",
-                                                  "De novo / somatic"  = "de_novo"),
-                                      selected = "all"),
-                          hr(),
-                          actionButton("view_btn", "Load / Refresh", class = "btn-primary")
-             ),
-             mainPanel(width = 9,
-                       DT::dataTableOutput("var_table")
-             )
-           )
+    fluidPage(
+      headerPanel("mtDNA Variant List"),
+      sidebarPanel(width = 3,
+        h4("Input"),
+        textInput("db_dir", "Database directory", value = DB_DIR),
+        textInput("manifest_file", "Manifest file (path)",
+                  placeholder = "/path/to/manifest.tsv"),
+        textInput("fam_file", "FAM file (path, optional)",
+                  placeholder = "/path/to/cohort.fam"),
+        hr(),
+        h4("Variant filters"),
+        numericInput("min_af", "Min heteroplasmy level / VAF", value = 0.03, min = 0, max = 1, step = 0.01),
+        numericInput("max_cohort_ac", "Max cohort AC (hom + het)", value = 9999, min = 0, step = 1),
+        numericInput("max_gnomad_af", "Max gnomAD AF (leave 1 to skip)", value = 1, min = 0, max = 1, step = 0.001),
+        checkboxInput("pass_only",        "PASS only",             value = FALSE),
+        checkboxInput("excl_strand_bias", "Exclude strand bias",  value = TRUE),
+        checkboxInput("exclude_hv",       "Exclude hypervariable", value = FALSE),
+        checkboxInput("exclude_blacklist", "Exclude blacklist",        value = TRUE),
+        checkboxInput("exclude_synonymous", "Exclude synonymous",     value = FALSE),
+        selectInput("region_filter", "Region",
+                    choices = c("All","CDS","rRNA","tRNA","D-loop"), selected = "All"),
+        textInput("gene_filter",   "Gene (e.g. ND1,COX1 or All)", value = "All"),
+        textInput("sample_filter", "Sample ID (leave blank for all)", value = ""),
+        hr(),
+        h4("Family analysis"),
+        textInput("family_id",  "Family ID",  value = ""),
+        textInput("proband_id", "Proband ID", value = ""),
+        selectInput("family_mode", "Family filter",
+                    choices = c("All"      = "all",
+                                "Shared"   = "shared",
+                                "De novo"  = "de_novo"),
+                    selected = "all"),
+        hr(),
+        actionButton("view_btn", "Load / Refresh", class = "btn-primary")
+      ),
+      mainPanel(width = 9,
+        DT::dataTableOutput("var_table")
+      )
+    )
   ),
-  
-  
+
+
 )
 
 # ===========================================================================
 # Server
 # ===========================================================================
 server <- function(input, output, session) {
-  
+
   db_data <- eventReactive(input$view_btn, {
     dir <- trimws(input$db_dir)
     db  <- list(
@@ -474,38 +533,44 @@ server <- function(input, output, session) {
     if (is.null(db$mitotip)) showNotification("MitoTIP not found — MitoTIP columns will be empty.", type = "warning", duration = 10)
     db
   })
-  
+
   samples_data <- eventReactive(input$view_btn, {
     req(nchar(trimws(input$manifest_file)) > 0)
-    withProgress(message = "Loading samples...", {
+    samps <- withProgress(message = "Loading samples...", {
       load_all_samples(trimws(input$manifest_file))
     })
+    updateNumericInput(session, "max_cohort_ac", value = length(samps))
+    samps
   })
-  
+
   fam_data <- eventReactive(input$view_btn, {
     path <- trimws(input$fam_file)
     if (nchar(path) == 0 || !file.exists(path)) return(NULL)
     load_fam(path)
   })
-  
+
   variants_merged <- eventReactive(input$view_btn, {
     samps <- samples_data()
     req(length(samps) > 0)
     vars <- merge_variants(samps)
     annotate_variants(vars, db_data())
   })
-  
+
   variants_filtered <- reactive({
     vars <- variants_merged()
     fam  <- fam_data()
-    
+
     # Min heteroplasmy filter
     if (input$min_af > 0)
       vars <- vars[!is.na(vars$VAF) & vars$VAF >= input$min_af, ]
-    
+
     if (input$pass_only)
       vars <- vars[!is.na(vars$FILTER) & vars$FILTER == "PASS", ]
-    
+
+    if ("cohort_AC_hom" %in% colnames(vars) && "cohort_AC_het" %in% colnames(vars))
+      vars <- vars[vars$cohort_AC_hom <= input$max_cohort_ac &
+                   vars$cohort_AC_het <= input$max_cohort_ac, ]
+
     # gnomAD MAF filter — for hom: both gnomAD_AF_hom and gnomAD_hap_AF_hom must pass
     #                     for het: both gnomAD_AF_het and gnomAD_hap_AF_het must pass
     if (input$max_gnomad_af < 1) {
@@ -520,49 +585,49 @@ server <- function(input, output, session) {
         is.na(af) | af <= thresh
       }
       vars <- vars[af_pass("gnomAD_AF_hom",     "gnomAD_AF_het") &
-                     af_pass("gnomAD_hap_AF_hom",  "gnomAD_hap_AF_het"), ]
+                   af_pass("gnomAD_hap_AF_hom",  "gnomAD_hap_AF_het"), ]
     }
-    
+
     if (input$excl_strand_bias)
       vars <- vars[!grepl("strand_bias", vars$FILTER, ignore.case = TRUE), ]
-    
+
     if (input$exclude_hv)        vars <- vars[!vars$Hypervariable %in% TRUE, ]
     if (input$exclude_blacklist)  vars <- vars[!vars$blacklist %in% TRUE, ]
     if (input$exclude_synonymous) vars <- vars[is.na(vars$MLC_consq) | vars$MLC_consq != "synonymous_variant", ]
-    
+
     if (input$region_filter != "All")
       vars <- vars[startsWith(vars$Region, input$region_filter), ]
-    
+
     gene_input <- trimws(input$gene_filter)
     if (gene_input != "All" && nchar(gene_input) > 0) {
       genes <- trimws(strsplit(gene_input, ",")[[1]])
       vars  <- vars[!is.na(vars$Gene) & vars$Gene %in% genes, ]
     }
-    
+
     sample_input <- trimws(input$sample_filter)
     if (nchar(sample_input) > 0)
       vars <- vars[vars$SampleID == sample_input, ]
-    
-    # Maternal filter
+
+    # Family filter
     if (!is.null(fam) &&
         nchar(trimws(input$family_id))  > 0 &&
-        nchar(trimws(input$proband_id)) > 0 &&
-        input$maternal_mode != "all") {
+        nchar(trimws(input$proband_id)) > 0) {
       vars <- tryCatch(
-        maternal_filter(vars, fam,
-                        family_id  = trimws(input$family_id),
-                        proband_id = trimws(input$proband_id),
-                        mode       = input$maternal_mode),
+        family_filter(vars,
+                      fam        = fam,
+                      family_id  = trimws(input$family_id),
+                      proband_id = trimws(input$proband_id),
+                      mode       = input$family_mode),
         error = function(e) { showNotification(e$message, type = "error"); vars }
       )
     }
     vars
   })
-  
+
   output$var_table <- DT::renderDataTable({
     vars <- variants_filtered()
     req(nrow(vars) > 0)
-    
+
     # Column display order:
     #   SampleID | core anno | AF DP FILTER genotype haplogroup hap_AF
     #   | gnomAD | MITOMAP | mitoTIP | PhyloP | links
@@ -570,7 +635,8 @@ server <- function(input, output, session) {
                    "genotype","haplogroup","Region","Gene","COMPLEX",
                    "MLC_consq","AP","APS","MLC_score","MCC",
                    "Hypervariable","Homopolymer","is_INDEL","blacklist")
-    db_cols   <- c("gnomAD_AF_hom","gnomAD_AF_het","gnomAD_AC_hom","gnomAD_AC_het",
+    db_cols   <- c("cohort_AC_hom","cohort_AC_het",
+                   "gnomAD_AF_hom","gnomAD_AF_het","gnomAD_AC_hom","gnomAD_AC_het",
                    "gnomAD_max_hl",
                    "gnomAD_hap_AF_hom","gnomAD_hap_AF_het",
                    "MITOMAP_locus","MITOMAP_disease","MITOMAP_status","MITOMAP_plasmy",
@@ -578,7 +644,7 @@ server <- function(input, output, session) {
     link_cols <- c("gnomAD_link")
     ord <- c(core_cols, db_cols, link_cols)
     vars <- vars[, ord[ord %in% colnames(vars)]]
-    
+
     DT::datatable(vars,
                   caption    = "mtDNA variant list",
                   filter     = "top",
@@ -587,8 +653,8 @@ server <- function(input, output, session) {
                   extensions = "Buttons",
                   options    = dt_options)
   })
-  
-  
+
+
 }
 
 shinyApp(ui = ui, server = server)
