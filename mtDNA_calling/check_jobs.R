@@ -7,30 +7,35 @@ input_file  <- "input_list_complete.txt"   # output of generate_input_list.R
 sh_dir      <- "sh_scripts"                # directory containing per-sample .sh scripts
 output_base <- "/path/to/output"           # base directory for mitoHPC output (same as run_multisample.R)
 
-# Expected mitoHPC output files (relative to <output_base>/<sample>/mitoHPC/)
-# A job is considered complete if ALL of these exist.
-expected_files <- c(
-  "out/{id}.merged/{id}.merged.mutect2.cvg.stat",
-  "out/{id}.merged/{id}.merged.mutect2.00.vcf",
-  "out/{id}.merged/{id}.merged.mutect2.haplogroup",
-  "out/{id}.merged/{id}.merged.mutect2.haplocheck"
-)
-
 # ================================
 # Check jobs
 # ================================
 files <- read.table(input_file, header = TRUE, sep = "\t")
 
-check_sample <- function(sample) {
-  id       <- sub("-(vcgs|batch[0-9]*)$", "", sample, ignore.case = TRUE)  # inner_id
+# Derive bam_base from the bam column (same logic as run_multisample.R)
+files$bam_base <- sub("\\.bam$", "", basename(files$bam))
+
+# Expected mitoHPC output files per sample (relative to <output_base>/<sample>/mitoHPC/).
+# Uses bam_base (BAM filename without .bam extension) — no hardcoded suffixes.
+# A job is considered complete if ALL of these exist.
+expected_files_for <- function(bam_base) {
+  c(
+    sprintf("out/%s/%s.mutect2.cvg.stat",  bam_base, bam_base),
+    sprintf("out/%s/%s.mutect2.00.vcf",    bam_base, bam_base),
+    sprintf("out/%s/%s.mutect2.haplogroup",bam_base, bam_base),
+    sprintf("out/%s/%s.mutect2.haplocheck",bam_base, bam_base)
+  )
+}
+
+check_sample <- function(sample, bam_base) {
   base_dir <- file.path(output_base, sample, "mitoHPC")
-  paths    <- gsub("\\{id\\}", id, expected_files)
+  paths    <- expected_files_for(bam_base)
   full     <- file.path(base_dir, paths)
   exists   <- file.exists(full)
   list(complete = all(exists), missing = paths[!exists])
 }
 
-results  <- lapply(files$sample, check_sample)
+results  <- mapply(check_sample, files$sample, files$bam_base, SIMPLIFY = FALSE)
 complete <- sapply(results, `[[`, "complete")
 
 n_total    <- nrow(files)
