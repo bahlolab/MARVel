@@ -264,3 +264,35 @@ n_ok  <- sum(!samples$meta$qc_flag, na.rm = TRUE)
 n_bad <- sum( samples$meta$qc_flag, na.rm = TRUE)
 message(sprintf("[01_load_data] Loaded %d samples (%d pass QC, %d flagged).",
                 nrow(samples$meta), n_ok, n_bad))
+
+# ── incomplete job detection ───────────────────────────────────────────────────
+# A sample is considered incomplete if all key output files are missing.
+incomplete <- samples$meta[
+  is.na(samples$meta$depth_median) &
+  is.na(samples$meta$haplogroup)   &
+  is.na(samples$meta$n_variants),
+  "ID"
+]
+
+partial <- samples$meta[
+  !is.na(samples$meta$depth_median) != !is.na(samples$meta$n_variants),
+  "ID"
+]
+
+if (length(incomplete) > 0) {
+  warning(sprintf(
+    "\n[01_load_data] %d sample(s) appear to have NO mitoHPC output (job likely did not complete):\n%s\n\nRe-run the corresponding SLURM jobs, e.g.:\n%s",
+    length(incomplete),
+    paste0("  ", incomplete, collapse = "\n"),
+    paste0("  sbatch ", file.path(sh_dir_hint <- Sys.getenv("SH_DIR", "<sh_scripts_dir>"),
+                                   paste0(incomplete, ".sh")), collapse = "\n")
+  ), call. = FALSE)
+}
+
+if (length(partial) > 0) {
+  message(sprintf(
+    "[01_load_data] WARNING: %d sample(s) have partial output (job may have been interrupted):\n%s\nCheck output logs and consider re-running these jobs.",
+    length(partial),
+    paste0("  ", partial, collapse = "\n")
+  ))
+}
