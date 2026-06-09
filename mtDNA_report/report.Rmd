@@ -1,5 +1,5 @@
 ---
-title: "`r params$cohort_label` — mtDNA Variant Report"
+title: "`r params$title`"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
   html_document:
@@ -11,7 +11,7 @@ output:
     code_folding: hide
 params:
   config: "config.R"
-  cohort_label: "Ataxia cohort"
+  title: "mtDNA Variant Report"
 ---
 
 ```{r setup, include=FALSE}
