@@ -210,9 +210,12 @@ parse_vcf <- function(vcf_file, sample_id) {
 # ---------------------------------------------------------------------------
 load_sample <- function(sample_folder, sample_id = NULL) {
   if (is.null(sample_id)) sample_id <- basename(sample_folder)
-  hits <- list.files(file.path(sample_folder, "out"),
-                     pattern = "\\.mutect2\\.mutect2\\.00\\.vcf$",
-                     recursive = TRUE, full.names = TRUE)
+  hits <- grep("(?<!\\.mutect2)\\.mutect2\\.00\\.vcf$",
+               list.files(file.path(sample_folder, "out"),
+                          recursive = TRUE,
+                          full.names = TRUE),
+               value = TRUE,
+               perl = TRUE)
   if (length(hits) == 0) stop(paste("No mutect2.00 VCF found under:", sample_folder))
   if (length(hits) > 1)  message(sprintf("Multiple VCFs found for %s, using first: %s", sample_id, hits[1]))
   vcf_file <- hits[1]
