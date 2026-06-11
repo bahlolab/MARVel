@@ -19,10 +19,12 @@ message(sprintf("Found %d sample director%s.", length(dirs), ifelse(length(dirs)
 rows <- lapply(dirs, function(id) {
   sample_folder <- file.path(results_dir, id, "mitoHPC")
 
-  vcf_hits <- list.files(file.path(sample_folder, "out"),
-                         pattern   = "\\.mutect2\\.00\\.vcf$",
-                         recursive = TRUE,
-                         full.names = FALSE)
+  vcf_hits <- grep("(?<!\\.mutect2)\\.mutect2\\.00\\.vcf$",
+                           list.files(file.path(sample_folder, "out"),
+                                      recursive = TRUE,
+                                      full.names = TRUE),
+                           value = TRUE,
+                           perl = TRUE)
   if (length(vcf_hits) == 0) {
     message(sprintf("  SKIP %s — VCF not found under %s/out/", id, sample_folder))
     return(NULL)
