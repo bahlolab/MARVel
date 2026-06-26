@@ -276,5 +276,5 @@ If you use this pipeline, please cite:
 
 ## Contact
 
-Wang Lo — wang.lo@wehi.edu.au  
+Longfei Wang — wang.lo@wehi.edu.au  
 Walter and Eliza Hall Institute of Medical Research
