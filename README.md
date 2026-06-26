@@ -1,4 +1,4 @@
-# mtDNA Variant Calling Pipeline
+# MAVIS — Mitochondrial Analysis, Variant Inspection & Summary
 
 An integrated pipeline for mitochondrial DNA (mtDNA) variant calling, cohort-level quality control reporting, and curation from whole-genome sequencing (WGS) data. Designed for mitochondrial disease and rare disease research.
 
