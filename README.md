@@ -128,15 +128,16 @@ Generates a self-contained interactive HTML cohort report.
 
 **Report sections:**
 
-| Section | Content |
-|---------|---------|
-| Coverage | Median depth, mtDNA copy number, per-position depth, CV distribution |
-| Contamination | Haplocheck estimates per sample, scatter vs depth |
-| Haplogroup | Macro-haplogroup distribution (L/M/N/R clades) |
-| PCA | Cohort projected onto 1000G mtDNA PCA (27 markers, 20 PCs) |
-| Variants | VAF distribution, consequence breakdown, homoplasmy/heteroplasmy by clade |
-| Relatedness | Pairwise Jaccard similarity heatmap, duplicate detection |
-| QC Summary | Interactive filterable table of all per-sample metrics |
+| Section | Tabs |
+|---------|------|
+| Coverage | Depth per sample, mtDNA-CN, base coverage, cumulative coverage, CV distribution |
+| Contamination | Level per sample, level vs depth |
+| Haplogroup | Macro-haplogroup distribution, assignment quality |
+| PCA | PC1 vs PC2, PC2 vs PC3, scree plot |
+| Variants | Summary, VAF distribution, homoplasmy by clade, heteroplasmy by clade, MSS, consequence breakdown, MLC score, frequency spectrum |
+| Relatedness | Pairwise Jaccard similarity, flagged pairs (conditional) |
+| QC Summary | Flag overview, per-sample table |
+| Glossary | Definitions for VAF, CV, haplogroup, heteroplasmy, Jaccard, MLC, MSS, mtDNA-CN, NUMT |
 
 **QC thresholds** (configurable in `config.R`):
 
