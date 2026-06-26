@@ -101,22 +101,21 @@ Wraps [MitoHPC](https://github.com/dpaulson45/mitoHPC) to run Mutect2 in mtDNA m
 
 | File | Description |
 |------|-------------|
-| `.mutect2.00.vcf` | Mutect2 variant calls |
-| `.mutect2.haplogroup` | Haplogroup assignment |
-| `.mutect2.haplocheck` | Contamination estimate |
-| `.mutect2.cvg.stat` | Coverage statistics (median, mean, min, max) |
-| `.mutect2.cvg` | Per-position depth |
+| `<sample>/<sample>.mutect2.mutect2.00.vcf` | Mutect2 variant calls |
+| `mutect2.haplocheck.tab` | Haplogroup assignment |
+| `mutect2.haplogroup.tab` | Contamination estimate |
+| `<sample>/<sample>.mutect2.cvg` | Per-position depth |
 | `count.tab` | mtDNA copy number |
 
 **Key parameters** (set in `init.sh`):
 
 ```bash
-HETEROPLASMY_FILTER=0.01     # minimum heteroplasmy threshold
-REFERENCE=hs38DH             # GRCh38 with decoy
-CALLER=mutect2               # mutect2 | freebayes | mutserve
+HP_ADIR=<BAM path>  # input BAM/CRAM path
+HP_M=mutect2          # SNV caller: mutect2 | mutserve | freebayes
+HP_L=                 # sample list (leave empty to auto-detect from HP_ADIR)
 ```
 
-Filtered flags: `strand_bias`, `weak_evidence`, `strict_strand`, `base_qual`, `position`
+Filtered flags: `strict_strand`, `strand_bias`, `base_qual`, `map_qual`, `weak_evidence`, `slippage`, `position`, `Homopolymer`
 
 ---
 
@@ -276,5 +275,5 @@ If you use this pipeline, please cite:
 
 ## Contact
 
-Longfei Wang — wang.lo@wehi.edu.au  
+Wang Lo — wang.lo@wehi.edu.au  
 Walter and Eliza Hall Institute of Medical Research
