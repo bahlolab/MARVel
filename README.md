@@ -1,4 +1,4 @@
-# MAVIS — Mitochondrial Analysis, Variant Inspection & Summary
+# MARVel — Mitochondrial Analysis, Reporting and Variant evaluation
 
 An integrated pipeline for mitochondrial DNA (mtDNA) variant calling, cohort-level quality control reporting, and curation from whole-genome sequencing (WGS) data. Designed for mitochondrial disease and rare disease research.
 
@@ -265,7 +265,7 @@ See [`disease_glossary.md`](disease_glossary.md) for mitochondrial disease abbre
 
 If you use this pipeline, please cite:
 
-- **MitoHPC:** Paulson et al. (cite relevant publication)
+- **MitoHPC:** Battle et al., NAR Genomics and Bioinformatics 2022
 - **gnomAD mtDNA:** Karczewski et al., *Nature* 2020; Laricchia et al., *Genome Research* 2022
 - **MITOMAP:** https://www.mitomap.org
 - **mitoTIP:** Sonney et al., *PLOS Genetics* 2017
