@@ -121,7 +121,7 @@ parse_vcf <- function(path) {
     info_row$SM     <- NULL
     info_row$NONSYN <- NULL
     info_row$HG     <- NULL
-    info_row$NUMT   <- !is.na(info_row$NUMT)
+    info_row$NUMT   <- if (is.null(info_row$NUMT)) rep(FALSE, nrow(info_row)) else !is.na(info_row$NUMT)
     cbind(base_df, info_row, row.names = NULL)
   })
   do.call(rbind, rows)
@@ -196,7 +196,7 @@ for (k in seq_along(cohort_ids)) {
                    } else NA_real_
 
   # -- VCF ---------------------------------------------------------------------
-  v <- parse_vcf(sample_path(id, "mutect2.00.vcf"))
+  v <- parse_vcf(sample_path(id, "mutect2.mutect2.00.vcf"))
   vcf_list[k] <- list(v)
 
   n_variants <- if (!is.null(v)) nrow(v) else NA_integer_
