@@ -210,12 +210,9 @@ parse_vcf <- function(vcf_file, sample_id) {
 # ---------------------------------------------------------------------------
 load_sample <- function(sample_folder, sample_id = NULL) {
   if (is.null(sample_id)) sample_id <- basename(sample_folder)
-  hits <- grep("(?<!\\.mutect2)\\.mutect2\\.00\\.vcf$",
-               list.files(file.path(sample_folder, "out"),
-                          recursive = TRUE,
-                          full.names = TRUE),
-               value = TRUE,
-               perl = TRUE)
+  hits <- list.files(file.path(sample_folder, "out"),
+                   pattern = "\\.mutect2\\.mutect2\\.00\\.vcf$",
+                   recursive = TRUE, full.names = TRUE)
   if (length(hits) == 0) stop(paste("No mutect2.00 VCF found under:", sample_folder))
   if (length(hits) > 1)  message(sprintf("Multiple VCFs found for %s, using first: %s", sample_id, hits[1]))
   vcf_file <- hits[1]
@@ -494,6 +491,7 @@ ui <- navbarPage(
         checkboxInput("exclude_hv",       "Exclude hypervariable", value = FALSE),
         checkboxInput("exclude_blacklist", "Exclude blacklist",        value = TRUE),
         checkboxInput("exclude_synonymous", "Exclude synonymous",     value = FALSE),
+        checkboxInput("exclude_intergenic", "Exclude intergenic",     value = FALSE),
         selectInput("region_filter", "Region",
                     choices = c("All","CDS","rRNA","tRNA","D-loop"), selected = "All"),
         textInput("gene_filter",   "Gene (e.g. ND1,COX1 or All)", value = "All"),
@@ -597,6 +595,7 @@ server <- function(input, output, session) {
     if (input$exclude_hv)        vars <- vars[!vars$Hypervariable %in% TRUE, ]
     if (input$exclude_blacklist)  vars <- vars[!vars$blacklist %in% TRUE, ]
     if (input$exclude_synonymous) vars <- vars[is.na(vars$MLC_consq) | vars$MLC_consq != "synonymous_variant", ]
+    if (input$exclude_intergenic) vars <- vars[is.na(vars$MLC_consq) | vars$MLC_consq != "intergenic_variant", ]
 
     if (input$region_filter != "All")
       vars <- vars[startsWith(vars$Region, input$region_filter), ]
