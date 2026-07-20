@@ -55,7 +55,7 @@ Each sample must have the following files under `<results_root>/<ID>/mitoHPC/out
 |------|---------|
 | `<ID>.merged.mutect2.cvg.stat` | Coverage statistics (median, mean, min, max) |
 | `<ID>.merged.mutect2.cvg` | Per-position depth (3-column: chrom, pos, depth) |
-| `<ID>.merged.mutect2.00.vcf` | Mutect2 VCF (mitochondrial mode) |
+| `<ID>.merged.mutect2.mutect2.00.vcf` | Mutect2 VCF (mitochondrial mode) |
 | `<ID>.merged.mutect2.haplogroup` | mitoHPC haplogroup assignment |
 | `<ID>.merged.mutect2.haplocheck` | Haplocheck contamination output |
 | `<inner_ID>/mutect2.haplocheck.tab` | Haplocheck extended table |
