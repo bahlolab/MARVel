@@ -101,7 +101,7 @@ Wraps [MitoHPC](https://github.com/dpaulson45/mitoHPC) to run Mutect2 in mtDNA m
 
 | File | Description |
 |------|-------------|
-| `<sample>/<sample>.mutect2.00.vcf` | Mutect2 variant calls |
+| `<sample>/<sample>.mutect2.mutect2.00.vcf` | Mutect2 variant calls |
 | `mutect2.haplocheck.tab` | Haplogroup assignment |
 | `mutect2.haplogroup.tab` | Contamination estimate |
 | `<sample>/<sample>.mutect2.cvg` | Per-position depth |
