@@ -31,7 +31,7 @@ find_mitomap <- function(db_dir, pattern) {
 MITOMAP_CDS  <- find_mitomap(DB_DIR, "MutationsCodingControl.*_VAR\\.csv$")
 MITOMAP_TRNA <- find_mitomap(DB_DIR, "MutationstRNA.*_VAR\\.csv$")
 
-BLACKLIST_POS <- c(301, 302, 310, 316, 3107, 5894, 10933, 16179,
+BLACKLIST_POS <- c(301, 302, 310, 316, 3107, 5894, 16179,
                    16181, 16182, 16183, 16188, 16189, 16192)
 
 # Longer codes before shorter ones so prefix matching doesn't short-circuit
