@@ -22,7 +22,7 @@ min_hom_vaf       <- 0.95   # VAF cut-off for homoplasmic classification
 
 # ── variant filtering ─────────────────────────────────────────────────────────
 # Positions blacklisted as known artefact-prone sites
-variant_blacklist <- c(301, 302, 310, 316, 3107, 5894, 10933, 16179,
+variant_blacklist <- c(301, 302, 310, 316, 3107, 5894, 16179,
                        16181:16183, 16188, 16189, 16192)
 # FILTER tags that disqualify a variant (partial string match)
 filter_exclude    <- "strand_bias"
