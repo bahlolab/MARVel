@@ -19,6 +19,7 @@ DB_DIR <- Sys.getenv("MTDNA_DB_DIR",
 
 GNOMAD_FILE  <- file.path(DB_DIR, "gnomad", "gnomad_chrM_hap_AF.tsv.gz")  # from prepare_databases.R
 MITOTIP_FILE <- file.path(DB_DIR, "MitoTIP", "mitotip_scores_27_04_2020_VAR.txt")
+AF_1000G_FILE <- file.path(DB_DIR, "allele_freq_1000g.csv")
 
 # MITOMAP filenames include download dates — discover by pattern rather than hardcoding
 find_mitomap <- function(db_dir, pattern) {
@@ -121,6 +122,20 @@ load_mitotip <- function(db_dir) {
   d <- as.data.frame(fread(f))
   d <- d[!is.na(d$VAR), c("VAR","MitoTIP_Score","Quartile")]
   colnames(d)[2:3] <- c("mitoTIP_score","mitoTIP_quartile")
+  d
+}
+
+# 1000G AF
+load_1000g_af <- function(db_dir) {
+  f <- file.path(db_dir, "allele_freq_1000g.csv")
+  if (!file.exists(f)) {
+    message("1000G allele frequency not found: ", f); return(NULL) }
+  message("1000G allele frequency: loading ", f)
+  
+  d <- as.data.frame(fread(f))
+  d <- d[, c("VAR", "POS", "REF", "ALT","AC_hom", "AF_hom", "AC_het", "AF_het")]
+  colnames(d)[colnames(d) %in% c("AC_hom", "AF_hom","AC_het", "AF_het")] <-
+    paste0("1000G_", colnames(d)[colnames(d) %in% c("AC_hom", "AF_hom","AC_het", "AF_het")])
   d
 }
 
@@ -535,11 +550,13 @@ server <- function(input, output, session) {
     db  <- list(
       gnomad  = load_gnomad(dir),
       mitomap = load_mitomap(dir),
-      mitotip = load_mitotip(dir)
+      mitotip = load_mitotip(dir),
+      af1000g = load_1000g_af(dir)
     )
     if (is.null(db$gnomad))  showNotification("gnomAD not found — gnomAD columns will be empty.",  type = "warning", duration = 10)
     if (is.null(db$mitomap)) showNotification("MITOMAP not found — MITOMAP columns will be empty.", type = "warning", duration = 10)
     if (is.null(db$mitotip)) showNotification("MitoTIP not found — MitoTIP columns will be empty.", type = "warning", duration = 10)
+    if (is.null(db$af1000g)) showNotification("1000G AF not found — 1000G columns will be empty.",type = "warning", duration = 10)
     db
   })
   
@@ -562,7 +579,14 @@ server <- function(input, output, session) {
     samps <- samples_data()
     req(length(samps) > 0)
     vars <- merge_variants(samps)
-    annotate_variants(vars, db_data())
+    db <- db_data()
+    vars <- annotate_variants(vars, db)
+    if (!is.null(db$af1000g)) {
+      vars <- dplyr::left_join(vars, db$af1000g, by = c("VAR", "POS", "REF", "ALT"))
+      af_cols <- grep("^1000G_AF", names(vars), value = TRUE)
+      vars[af_cols] <- lapply(vars[af_cols], round, digits = 4)
+    }
+    vars
   })
   
   variants_filtered <- reactive({
@@ -648,7 +672,8 @@ server <- function(input, output, session) {
     db_cols   <- c("cohort_AC_hom","cohort_AC_het",
                    "gnomAD_AF_hom","gnomAD_AF_het","gnomAD_AC_hom","gnomAD_AC_het",
                    "gnomAD_max_hl",
-                   "gnomAD_hap_AF_hom","gnomAD_hap_AF_het",
+                   "gnomAD_hap_AF_hom","gnomAD_hap_AF_het","1000G_AC_hom","1000G_AF_hom",
+                   "1000G_AC_het","1000G_AF_het",
                    "MITOMAP_locus","MITOMAP_disease","MITOMAP_status","MITOMAP_plasmy",
                    "mitoTIP_score","mitoTIP_quartile")
     link_cols <- c("gnomAD_link")
