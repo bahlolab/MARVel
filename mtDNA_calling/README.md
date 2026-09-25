@@ -1,6 +1,6 @@
 # MitoHPC: Mitochondrial High Performance Caller
 
-Scripts for running [MitoHPC](https://github.com/dpuiu/MitoHPC) — a pipeline for estimating mitochondrial DNA copy number and heteroplasmy from whole-genome sequencing data.
+Scripts for running [MitoHPC](https://github.com/bahlolab/MitoHPC) — a pipeline for estimating mitochondrial DNA copy number and heteroplasmy from whole-genome sequencing data.
 
 ## Citation
 
