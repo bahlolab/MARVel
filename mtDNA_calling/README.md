@@ -1,7 +1,8 @@
 # MitoHPC: Mitochondrial High Performance Caller
 
-Scripts for running [MitoHPC](https://github.com/bahlolab/MitoHPC) — a pipeline for estimating mitochondrial DNA copy number and heteroplasmy from whole-genome sequencing data.
+Scripts for running [MitoHPC](https://github.com/dpuiu/MitoHPC) — a pipeline for estimating mitochondrial DNA copy number and heteroplasmy from whole-genome sequencing data. 
 
+We identified and fixed a bug in the original pipeline that affected samples with structural deletions spanning the artificial breakpoint of the linearised mitochondrial reference. In these cases, reads downstream of the breakpoint were incorrectly truncated in the BAM file. The fix is implemented in our forked version of MitoHPC: https://github.com/bahlolab/MitoHPC
 ## Citation
 
 Battle et al. (2022). A bioinformatics pipeline for estimating mitochondrial DNA copy number and heteroplasmy levels from whole genome sequencing data. *Nucleic Acids Research*. https://doi.org/10.1093/nar/gkac290
@@ -13,7 +14,7 @@ Battle et al. (2022). A bioinformatics pipeline for estimating mitochondrial DNA
 See [install.sh](install.sh) for a minimal setup. In brief:
 
 ```bash
-git clone https://github.com/dpuiu/MitoHPC.git
+git clone https://github.com/bahlolab/MitoHPC.git
 cd MitoHPC/scripts
 export HP_SDIR=$(pwd)
 . ./init.sh   # or init.hs38DH.sh / init.hg19.sh / init.mm39.sh
