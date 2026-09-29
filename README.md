@@ -86,7 +86,7 @@ shiny::runApp("mtDNA_curation/app.R")
 
 ### 1. `mtDNA_calling`
 
-Wraps [MitoHPC](https://github.com/dpaulson45/mitoHPC) to run Mutect2 in mtDNA mode across a cohort.
+Wraps [MitoHPC](https://github.com/bahlolab/MitoHPC) to run Mutect2 in mtDNA mode across a cohort.
 
 **Scripts:**
 
