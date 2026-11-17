@@ -17,6 +17,8 @@ The pipeline has three main modules:
 
 **Reference databases used:** gnomAD v3.1 (mtDNA), MITOMAP, mitoTIP
 
+<img width="5781" height="3249" alt="Figure2" src="https://github.com/user-attachments/assets/2421106e-3514-4f75-bf2e-8779d4552ddb" />
+
 ---
 
 ## Requirements
